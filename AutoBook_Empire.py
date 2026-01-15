@@ -7,32 +7,40 @@ from reportlab.lib.styles import getSampleStyleSheet
 # ===============================
 # 🔐 GROQ API FROM STREAMLIT SECRETS
 # ===============================
+# تأكد أنك حاط GROQ_API_KEY في Streamlit Secrets
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 # ===============================
-# 🧠 AI CORE
+# 🧠 AI CORE (FIXED FOR BAD REQUEST)
 # ===============================
 def ai(prompt):
     """
-    Calls Groq API to generate text from prompt.
-    Updated to a valid model name: llama3-8b-8192
+    نسخة محسنة لتفادي أخطاء BadRequest و NotFound
     """
-    response = client.chat.completions.create(
-        model="llama3-8b-8192",  # ✅ تم تصحيح اسم الموديل هنا
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.75
-    )
-    return response.choices[0].message.content.strip()
+    try:
+        response = client.chat.completions.create(
+            model="llama3-8b-8192",  # الموديل المستقر والسريع
+            messages=[
+                {"role": "system", "content": "You are a professional digital product creator and copywriter."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2500  # كافية لإنشاء فصول الكتاب
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        st.error(f"Groq API Error: {e}")
+        return "Error generating content."
 
 # ===============================
 # 📘 PRODUCT GENERATOR
 # ===============================
 def generate_product(niche):
-    # Generate title & subtitle
+    # إنشاء العنوان والعنوان الفرعي
     title = ai(f"Generate a short, powerful ebook title for niche: {niche}")
     subtitle = ai(f"Generate a catchy subtitle for this ebook: {title}")
 
-    # Generate short ebook (3 chapters max for stability)
+    # إنشاء محتوى الكتاب
     ebook = ai(f"""
 Write a premium short ebook for niche: {niche}.
 Title: {title}
@@ -49,30 +57,18 @@ Tone: Professional, inspirational, concise
 Language: English
 """)
 
-    # Hotmart sales copy
+    # وصف المنتج لـ Hotmart
     hotmart = ai(f"""
-Write a high-converting Hotmart product description.
-
+Write a high-converting Hotmart product description for:
 Title: {title}
-Subtitle: {subtitle}
 Niche: {niche}
 
-Include:
-- Benefits in bullet points
-- Who this is for
-- Transformation promise
-- Strong CTA
-
+Include: Benefits, target audience, and a strong CTA.
 Language: English
 """)
 
-    # Cover AI prompt
-    cover_prompt = ai(f"""
-Create an AI image prompt for an ebook cover.
-Book title: {title}
-Niche: {niche}
-Style: Minimal, premium, bestseller, digital product
-""")
+    # أمر الذكاء الاصطناعي للغلاف
+    cover_prompt = ai(f"Create a professional AI image prompt for an ebook cover titled '{title}' in the {niche} niche. Minimalist and premium style.")
 
     return title, subtitle, ebook, hotmart, cover_prompt
 
@@ -85,13 +81,14 @@ def create_pdf(path, title, subtitle, content):
     story = []
 
     story.append(Paragraph(title, styles["Title"]))
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 12))
     story.append(Paragraph(subtitle, styles["Italic"]))
-    story.append(Spacer(1, 20))
+    story.append(Spacer(1, 24))
 
     for line in content.split("\n"):
-        story.append(Paragraph(line, styles["Normal"]))
-        story.append(Spacer(1, 6))
+        if line.strip():
+            story.append(Paragraph(line, styles["Normal"]))
+            story.append(Spacer(1, 6))
 
     pdf.build(story)
 
@@ -117,43 +114,29 @@ if st.button("🚀 GENERATE PRODUCTS"):
     if not niche:
         st.error("Please enter a niche.")
     else:
-        with st.spinner("AI is creating your digital products..."):
-            for i in range(1, books + 1):
+        with st.spinner("AI is crafting your digital empire..."):
+            for i in range(1, int(books) + 1):
                 title, subtitle, ebook, hotmart, cover = generate_product(niche)
 
-                folder = f"PRODUCT_{i}_{title.replace(' ', '_')}"
+                # تنظيف اسم الملف من الرموز غير المسموح بها
+                clean_title = "".join(x for x in title if x.isalnum() or x in "._- ")
+                folder = f"PRODUCT_{i}"
                 os.makedirs(folder, exist_ok=True)
 
-                pdf_path = f"{folder}/{title}.pdf"
+                pdf_path = f"{folder}/ebook.pdf"
                 create_pdf(pdf_path, title, subtitle, ebook)
 
-                st.success(f"✅ Product {i} Ready")
-                st.subheader(title)
-
-                # 📘 PDF DOWNLOAD
-                st.download_button(
-                    label="📘 Download Ebook PDF",
-                    data=read_file(pdf_path),
-                    file_name=f"{title}.pdf",
-                    mime="application/pdf"
-                )
-
-                # 🛒 HOTMART COPY DOWNLOAD
-                st.download_button(
-                    label="🛒 Download Hotmart Description",
-                    data=hotmart,
-                    file_name="hotmart_description.txt",
-                    mime="text/plain"
-                )
-
-                # 🎨 COVER PROMPT DOWNLOAD
-                st.download_button(
-                    label="🎨 Download Cover Prompt",
-                    data=cover,
-                    file_name="cover_prompt.txt",
-                    mime="text/plain"
-                )
-
+                st.success(f"✅ Product {i}: {title} Ready!")
+                
+                # أزرار التحميل
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.download_button("📘 Download PDF", read_file(pdf_path), f"{clean_title}.pdf", "application/pdf")
+                with col2:
+                    st.download_button("🛒 Hotmart Copy", hotmart, f"hotmart_{i}.txt", "text/plain")
+                with col3:
+                    st.download_button("🎨 Cover Prompt", cover, f"cover_{i}.txt", "text/plain")
+                
                 st.divider()
 
         st.balloons()
