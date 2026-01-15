@@ -13,8 +13,12 @@ client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 # 🧠 AI CORE
 # ===============================
 def ai(prompt):
+    """
+    Calls Groq API to generate text from prompt.
+    Updated to use llama3-7b (stable & fast)
+    """
     response = client.chat.completions.create(
-        model="llama3-70b-8192",
+        model="llama3-7b",  # ✅ updated model
         messages=[{"role": "user", "content": prompt}],
         temperature=0.75
     )
@@ -24,27 +28,28 @@ def ai(prompt):
 # 📘 PRODUCT GENERATOR
 # ===============================
 def generate_product(niche):
-    title = ai(f"Generate a powerful ebook title for niche: {niche}")
-    subtitle = ai(f"Generate a subtitle for this ebook: {title}")
+    # Generate title & subtitle
+    title = ai(f"Generate a short, powerful ebook title for niche: {niche}")
+    subtitle = ai(f"Generate a catchy subtitle for this ebook: {title}")
 
+    # Generate short ebook (3 chapters max for stability)
     ebook = ai(f"""
-Write a premium short ebook.
-
+Write a premium short ebook for niche: {niche}.
 Title: {title}
 Subtitle: {subtitle}
-Niche: {niche}
 
 Structure:
 - Introduction
-- 5 Actionable Chapters
+- 3 Actionable Chapters
 - Practical Tips or Exercises
 - Conclusion
 - Strong Call To Action
 
-Tone: Professional, inspirational
+Tone: Professional, inspirational, concise
 Language: English
 """)
 
+    # Hotmart sales copy
     hotmart = ai(f"""
 Write a high-converting Hotmart product description.
 
@@ -53,8 +58,7 @@ Subtitle: {subtitle}
 Niche: {niche}
 
 Include:
-- Emotional hook
-- Benefits (bullet points)
+- Benefits in bullet points
 - Who this is for
 - Transformation promise
 - Strong CTA
@@ -62,9 +66,9 @@ Include:
 Language: English
 """)
 
+    # Cover AI prompt
     cover_prompt = ai(f"""
-Create a professional AI image prompt for an ebook cover.
-
+Create an AI image prompt for an ebook cover.
 Book title: {title}
 Niche: {niche}
 Style: Minimal, premium, bestseller, digital product
