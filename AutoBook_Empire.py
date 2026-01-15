@@ -15,10 +15,10 @@ client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 def ai(prompt):
     """
     Calls Groq API to generate text from prompt.
-    Updated to use llama3-7b (stable & fast)
+    Updated to a valid model name: llama3-8b-8192
     """
     response = client.chat.completions.create(
-        model="llama3-7b",  # ✅ updated model
+        model="llama3-8b-8192",  # ✅ تم تصحيح اسم الموديل هنا
         messages=[{"role": "user", "content": prompt}],
         temperature=0.75
     )
