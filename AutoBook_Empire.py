@@ -1,122 +1,132 @@
 import os
 import streamlit as st
 from groq import Groq
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_JUSTIFY
 
 # ===============================
-# 🔐 GROQ API FROM STREAMLIT SECRETS
+# 🔐 API SETUP
 # ===============================
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
-# ===============================
-# 🧠 AI CORE (UPDATED TO WORKING MODELS)
-# ===============================
 def ai(prompt, model_type="fast"):
-    """
-    استعمال أحدث موديلات Groq المتاحة حالياً
-    """
-    # عزلنا الموديلات اللي خدامين 100% دابا
     model = "llama-3.1-8b-instant" if model_type == "fast" else "llama-3.3-70b-versatile"
-    
     try:
         response = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": "You are a world-class digital product creator."},
+                {"role": "system", "content": "You are an expert author and researcher. Write with depth, examples, and professional insight."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=2500
+            max_tokens=3500
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        # هاد السطر غيوريك الأرور الحقيقي إلا وقعات شي حاجة
-        st.error(f"Groq API Error: {e}")
-        return f"Error with model {model}"
+        return f"Error: {e}"
 
 # ===============================
-# 📘 PRODUCT GENERATOR
+# 🧠 PROFESSIONAL BOOK ENGINE
 # ===============================
-def generate_product(niche):
-    # نستخدم الموديل السريع للعناوين
-    title = ai(f"Generate a short, powerful ebook title for niche: {niche}", "fast")
-    subtitle = ai(f"Generate a catchy subtitle for this ebook: {title}", "fast")
+def generate_pro_book(niche):
+    # 1. توليد عنوان جذاب وهيكل مفصل (Outline)
+    structure_raw = ai(f"""Create a detailed 5-chapter outline for a 50-page ebook about '{niche}'. 
+    For each chapter, provide a specific real-world Case Study or Expert Example to include.
+    Make it appeal to a high-ticket audience.""", "smart")
+    
+    title = ai(f"Based on this outline: '{structure_raw}', give me one powerful bestseller book title.", "fast")
+    subtitle = ai(f"Give me a catchy emotional subtitle for the book: {title}", "fast")
 
-    # نستخدم الموديل القوي 70b لكتابة الكتاب باش يجي جودة عالية
-    ebook = ai(f"""
-Write a premium short ebook for niche: {niche}.
-Title: {title}
-Subtitle: {subtitle}
+    full_book_content = []
 
-Structure:
-- Introduction
-- 3 Actionable Chapters
-- Practical Tips
-- Conclusion
-- Strong CTA
-""", "smart")
+    # 2. كتابة كل فصل بعمق (الحل لمشكل الاختصار)
+    chapters = ["Chapter 1", "Chapter 2", "Chapter 3", "Chapter 4", "Chapter 5"]
+    
+    progress_bar = st.progress(0)
+    for i, chap_name in enumerate(chapters):
+        st.write(f"✍️ Writing {chap_name} with Case Studies...")
+        content = ai(f"""
+        Write the full content for {chap_name} of the book '{title}'.
+        Niche: {niche}
+        Context: {structure_raw}
+        
+        STRICT REQUIREMENTS:
+        - MINIMUM 1000 words for this chapter.
+        - Include a 'Deep Dive Case Study' section with real-world examples and numbers.
+        - Add 'Step-by-Step Action Plan' for the reader.
+        - Use professional, authoritative, and engaging language.
+        - No fluff; focus on high-value information.
+        """, "smart")
+        
+        full_book_content.append(content)
+        progress_bar.progress((i + 1) / len(chapters))
 
-    hotmart = ai(f"Write a high-converting Hotmart description for: {title}", "fast")
-    cover_prompt = ai(f"AI image prompt for ebook cover: {title}", "fast")
+    # 3. ملحقات البيزنس
+    hotmart = ai(f"Write a 1000-word high-converting sales page for the book '{title}' in the {niche} niche.", "smart")
+    cover = ai(f"Create a high-end cinematic AI image prompt for the book cover: {title}", "fast")
 
-    return title, subtitle, ebook, hotmart, cover_prompt
+    return title, subtitle, full_book_content, hotmart, cover
 
 # ===============================
-# 📄 PDF CREATOR (STAYS THE SAME)
+# 📄 PDF CREATOR (PRO VERSION)
 # ===============================
-def create_pdf(path, title, subtitle, content):
+def create_pro_pdf(path, title, subtitle, chapters_list):
     pdf = SimpleDocTemplate(path)
     styles = getSampleStyleSheet()
+    
+    # ستايل مخصص للفقرات باش تجي مريحة في القراءة
+    justified_style = ParagraphStyle(name='Justify', parent=styles['Normal'], alignment=TA_JUSTIFY, fontSize=11, leading=14)
+    
     story = []
+    # Title Page
+    story.append(Spacer(1, 100))
     story.append(Paragraph(title, styles["Title"]))
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 20))
     story.append(Paragraph(subtitle, styles["Italic"]))
-    story.append(Spacer(1, 24))
-    for line in content.split("\n"):
-        if line.strip():
-            story.append(Paragraph(line, styles["Normal"]))
-            story.append(Spacer(1, 6))
-    pdf.build(story)
+    story.append(PageBreak())
 
-def read_file(path):
-    with open(path, "rb") as f:
-        return f.read()
+    # Chapters
+    for i, content in enumerate(chapters_list):
+        story.append(Paragraph(f"Chapter {i+1}", styles["Heading1"]))
+        story.append(Spacer(1, 12))
+        for line in content.split("\n"):
+            if line.strip():
+                story.append(Paragraph(line, justified_style))
+                story.append(Spacer(1, 8))
+        story.append(PageBreak())
+
+    pdf.build(story)
 
 # ===============================
 # 🌐 STREAMLIT UI
 # ===============================
-st.set_page_config(page_title="AUTO MONEY MODE", layout="centered")
-st.title("🔥 AUTO BOOK FACTORY (v2.0)")
+st.set_page_config(page_title="PRO BOOK FACTORY", layout="wide")
+st.title("🚀 THE PROFESSIONAL EBOOK EMPIRE")
+st.sidebar.header("Settings")
+niche_input = st.sidebar.text_input("🎯 Target Niche", "Luxury Real Estate Investing")
 
-niche = st.text_input("🎯 Enter Niche", "Passive Income Strategies")
-books = st.number_input("📚 Number of Books", 1, 5, 1)
+if st.sidebar.button("GENERATE MASTERPIECE"):
+    with st.status("🛠️ Building your professional empire...") as status:
+        title, subtitle, content_list, hotmart, cover = generate_pro_book(niche_input)
+        
+        pdf_path = "final_pro_book.pdf"
+        create_pro_pdf(pdf_path, title, subtitle, content_list)
+        
+        status.update(label="✅ Book Complete!", state="complete")
 
-if st.button("🚀 GENERATE PRODUCTS"):
-    if not niche:
-        st.error("Please enter a niche.")
-    else:
-        with st.spinner("Creating content with Llama 3.3 & 3.1..."):
-            for i in range(1, int(books) + 1):
-                title, subtitle, ebook, hotmart, cover = generate_product(niche)
+    st.header(f"📖 {title}")
+    st.subheader(subtitle)
 
-                # تأكد أن العنوان ليس فيه خطأ
-                if "Error" in title:
-                    st.error("Failed to connect to Groq. Check your API Key.")
-                    break
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        with open(pdf_path, "rb") as f:
+            st.download_button("📘 Download Professional PDF", f, "pro_ebook.pdf")
+    with col2:
+        st.download_button("🛒 Get Sales Copy", hotmart, "sales_page.txt")
+    with col3:
+        st.download_button("🎨 Get Cover Prompt", cover, "cover_prompt.txt")
 
-                folder = f"PRODUCT_{i}"
-                os.makedirs(folder, exist_ok=True)
-                pdf_path = f"{folder}/ebook.pdf"
-                create_pdf(pdf_path, title, subtitle, ebook)
-
-                st.success(f"✅ Ready: {title}")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.download_button("📘 PDF", read_file(pdf_path), f"book_{i}.pdf")
-                with col2:
-                    st.download_button("🛒 Copy", hotmart, f"copy_{i}.txt")
-                with col3:
-                    st.download_button("🎨 Cover", cover, f"prompt_{i}.txt")
-                st.divider()
-        st.balloons()
+    st.divider()
+    st.markdown("### 📝 Sales Copy Preview")
+    st.text_area("Hotmart Page", hotmart, height=300)
