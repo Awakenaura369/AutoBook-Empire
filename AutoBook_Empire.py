@@ -6,117 +6,110 @@ from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib import colors
 import re
 
-# [2026-01-10] AI engine is Groq
+# إعداد المحرك (Groq)
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
-def ai(prompt, model_type="smart"):
-    model = "llama-3.3-70b-versatile" # الموديل الأقوى لتفادي السطحية
+def ai_writer(prompt):
+    # استخدام أقوى موديل للتركيز فقط على جودة الكتابة
     try:
         response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "system", "content": "You are an expert author. Write deep, actionable content with case studies. No intro filler."},
-                      {"role": "user", "content": prompt}],
-            temperature=0.6,
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": """You are a world-class non-fiction author. 
+                Your writing is:
+                1. Deep and Analytical: Avoid surface-level information.
+                2. Practical: Include real-world case studies with data.
+                3. Structured: Use clear steps and actionable advice.
+                4. Professional: No conversational filler or AI self-references."""},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.5, # حرارة منخفضة لضمان الدقة والاحترافية
             max_tokens=4000
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
         return f"Error: {e}"
 
-def clean_pro(text):
+def clean_text(text):
+    # تنظيف احترافي للنص من أي شوائب
     t = text.replace("**", "").replace("###", "").replace("---", "")
-    t = re.sub(r"(?i)^(here is|certainly|sure|based on|i will|i suggest).*?[:\n]", "", t).strip()
+    t = re.sub(r"(?i)^(here is|certainly|sure|based on|in this chapter).*?[:\n]", "", t).strip()
     return t
 
-# ===============================
-# 📄 FIXED PDF CREATOR (NO OVERLAP)
-# ===============================
-def create_masterpiece_pdf(path, title, subtitle, intro, chapters_data):
+def create_pro_pdf(path, title, subtitle, intro, chapters):
     pdf = SimpleDocTemplate(path)
     styles = getSampleStyleSheet()
     
-    # تحسين الـ Styles لمنع التداخل
-    title_style = ParagraphStyle('T', parent=styles['Title'], fontSize=26, textColor=colors.navy, alignment=TA_CENTER, leading=32)
-    sub_style = ParagraphStyle('S', parent=styles['Italic'], fontSize=12, textColor=colors.grey, alignment=TA_CENTER, leading=16)
-    chap_style = ParagraphStyle('C', parent=styles['Heading1'], fontSize=20, textColor=colors.darkblue, spaceBefore=30, spaceAfter=20)
-    body_style = ParagraphStyle('B', parent=styles['Normal'], alignment=TA_JUSTIFY, fontSize=11, leading=16)
-    box_style = ParagraphStyle('Box', parent=styles['Normal'], fontSize=10, textColor=colors.whitesmoke, backColor=colors.darkslategray, borderPadding=10)
+    # ستايلات هندسية لمنع التداخل
+    title_style = ParagraphStyle('MainTitle', parent=styles['Title'], fontSize=28, textColor=colors.navy, alignment=TA_CENTER, leading=34, spaceAfter=20)
+    sub_style = ParagraphStyle('SubTitle', parent=styles['Italic'], fontSize=14, textColor=colors.grey, alignment=TA_CENTER, leading=18)
+    chap_style = ParagraphStyle('ChapterTitle', parent=styles['Heading1'], fontSize=22, textColor=colors.darkblue, spaceBefore=40, spaceAfter=20)
+    body_style = ParagraphStyle('BodyText', parent=styles['Normal'], alignment=TA_JUSTIFY, fontSize=11, leading=16)
+    box_style = ParagraphStyle('ActionBox', parent=styles['Normal'], fontSize=10, textColor=colors.whitesmoke, backColor=colors.darkslategray, borderPadding=12)
 
     story = []
     
-    # 1. صفحة الغلاف مع مساحات كافية
-    story.append(Spacer(1, 150))
-    story.append(Paragraph(clean_pro(title), title_style))
-    story.append(Spacer(1, 20)) # مسافة أمان لمنع التداخل
-    story.append(Paragraph(clean_pro(subtitle), sub_style))
+    # 1. صفحة العنوان (نقية ومحترفة)
+    story.append(Spacer(1, 200))
+    story.append(Paragraph(clean_text(title), title_style))
+    story.append(Spacer(1, 15))
+    story.append(Paragraph(clean_text(subtitle), sub_style))
     story.append(PageBreak())
 
-    # 2. المقدمة + البونص (قائمة الأدوات)
-    story.append(Paragraph("Introduction & Success Roadmap", chap_style))
-    for p in clean_pro(intro).split("\n\n"):
-        story.append(Paragraph(p, body_style))
-        story.append(Spacer(1, 10))
-    
-    # إضافة Bonus: قائمة الأدوات لزيادة القيمة
-    story.append(Spacer(1, 20))
-    story.append(Paragraph("🎁 BONUS: ESSENTIAL TOOLS LIST", ParagraphStyle('H', parent=body_style, textColor=colors.red)))
-    tools_list = "1. Google Analytics (Data) | 2. Canva (Design) | 3. Meta Ads Manager (Traffic) | 4. ChatGPT/Groq (Content)"
-    story.append(Paragraph(tools_list, box_style))
-    story.append(PageBreak())
-
-    # 3. الفصول مع Action Plans
-    for i, chap in enumerate(chapters_data):
-        story.append(Paragraph(f"Chapter {i+1}: {chap['title']}", chap_style))
-        for p in clean_pro(chap['content']).split("\n\n"):
+    # 2. المقدمة العميقة
+    story.append(Paragraph("Introduction", chap_style))
+    for p in clean_text(intro).split("\n\n"):
+        if p.strip():
             story.append(Paragraph(p, body_style))
-            story.append(Spacer(1, 8))
+            story.append(Spacer(1, 12))
+    story.append(PageBreak())
+
+    # 3. الفصول (محتوى + Case Study + Action Plan)
+    for i, chap in enumerate(chapters):
+        story.append(Paragraph(f"Chapter {i+1}: {chap['title']}", chap_style))
+        for p in clean_text(chap['content']).split("\n\n"):
+            if p.strip():
+                story.append(Paragraph(p, body_style))
+                story.append(Spacer(1, 10))
         
-        # Action Plan
-        story.append(Spacer(1, 15))
-        story.append(Paragraph("✅ YOUR ACTION PLAN:", ParagraphStyle('H', parent=body_style, textColor=colors.gold)))
-        story.append(Paragraph(clean_pro(chap['action']), box_style))
+        # إضافة صندوق الخطوات العملية (Value Booster)
+        story.append(Spacer(1, 20))
+        story.append(Paragraph("🛠️ STRATEGIC ACTION PLAN:", ParagraphStyle('H', parent=body_style, textColor=colors.gold, fontWeight='bold')))
+        story.append(Paragraph(clean_text(chap['action']), box_style))
         story.append(PageBreak())
         
     pdf.build(story)
 
-# ===============================
-# 🌐 UI SETUP
-# ===============================
-st.set_page_config(page_title="SNIPER FACTORY", layout="wide")
-t1, t2 = st.tabs(["📚 Book Factory", "🎯 Facebook Sniper"])
+# واجهة المستخدم البسيطة والمركزة
+st.set_page_config(page_title="THE CONTENT MASTER", layout="centered")
+st.title("✍️ THE CONTENT MASTER")
+st.write("هذا المحرك مخصص فقط لإنشاء محتوى كتب احترافي وعميق.")
 
-with t1:
-    st.title("🏆 HIGH-VALUE BOOK FACTORY")
-    niche = st.text_input("🎯 Niche", "E-commerce Growth")
-    if st.button("🚀 GENERATE MASTERPIECE"):
-        with st.status("🛠️ Engineering...") as s:
-            title = ai(f"One elite title for {niche}", "fast")
-            subtitle = ai(f"One subtitle for {title}", "fast")
-            intro = ai(f"Deep intro for '{title}'", "smart")
-            chapters_data = []
-            for i in range(1, 6):
-                ch_t = ai(f"Chapter {i} title for '{title}'", "fast")
-                cont = ai(f"Deep content for '{ch_t}' with a Case Study.", "smart")
-                act = ai(f"5-step action checklist for '{ch_t}'", "fast")
-                chapters_data.append({"title": ch_t, "content": cont, "action": act})
-            hotmart = ai(f"Sales copy for {title}", "smart")
-            cover = ai(f"AI image prompt for {title}", "fast")
-            pdf_p = "masterpiece.pdf"
-            create_masterpiece_pdf(pdf_p, title, subtitle, intro, chapters_data)
-            s.update(label="✅ Ready!", state="complete")
+niche = st.text_input("🎯 ما هو موضوع الكتاب؟", "Advanced Digital Growth")
 
-        st.success(f"Created: {title}")
-        c1, c2, c3 = st.columns(3)
-        with c1: 
-            with open(pdf_p, "rb") as f: st.download_button("📘 Download Ebook", f, "ebook.pdf")
-        with c2: st.download_button("🛒 Hotmart Copy", hotmart, "hotmart.txt")
-        with c3: st.download_button("🎨 Cover Prompt", cover, "cover.txt")
-        st.divider()
-        st.subheader("🛒 Hotmart Preview")
-        st.info(hotmart)
+if st.button("🚀 إنشاء الكتاب باحترافية"):
+    with st.status("🛠️ يجري الآن هندسة المحتوى...") as status:
+        # التركيز على العناوين أولاً
+        title = ai_writer(f"Create one premium bestseller title for {niche}.")
+        subtitle = ai_writer(f"Create a deep, results-oriented subtitle for '{title}'.")
+        
+        # إنشاء مقدمة قوية
+        intro = ai_writer(f"Write a 600-word introduction for '{title}'. Focus on the pain points and the solution.")
+        
+        # إنشاء الفصول بعمق (Case Studies included)
+        chapters = []
+        for i in range(1, 6):
+            st.write(f"⌛ جاري كتابة الفصل {i} بعمق...")
+            ch_title = ai_writer(f"Provide a strong title for Chapter {i} of '{title}'.")
+            # هنا نطلب Case Study صريحة
+            ch_content = ai_writer(f"Write the full content for '{ch_title}'. Include a REAL-WORLD CASE STUDY with data and numbers.")
+            ch_action = ai_writer(f"Create a 5-step implementation checklist for the reader based on '{ch_title}'.")
+            chapters_data = {"title": ch_title, "content": ch_content, "action": ch_action}
+            chapters.append(chapters_data)
+        
+        create_pro_pdf("pro_masterpiece.pdf", title, subtitle, intro, chapters)
+        status.update(label="✅ تم إنشاء الكتاب بنجاح!", state="complete")
 
-with t2:
-    # [2026-01-13] Facebook Sniper tab
-    st.title("🎯 FACEBOOK SNIPER")
-    if st.button("🔥 Generate Hooks"):
-        st.write(ai(f"5 aggressive FB hooks for {niche}", "smart"))
+    st.success(f"تم إنجاز: {title}")
+    with open("pro_masterpiece.pdf", "rb") as f:
+        st.download_button("📘 تحميل الكتاب (النسخة الاحترافية)", f, "professional_book.pdf")
