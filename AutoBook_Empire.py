@@ -1,119 +1,128 @@
-import os
 import streamlit as st
 from groq import Groq
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_JUSTIFY
-from reportlab.lib import colors # مكتبة الألوان
+from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
+from reportlab.lib import colors
 import re
 
 # ===============================
-# 🔐 API SETUP (GROQ ENGINE)
+# 🔐 API & ENGINE
 # ===============================
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
-def ai(prompt, model_type="fast"):
-    model = "llama-3.1-8b-instant" if model_type == "fast" else "llama-3.3-70b-versatile"
+def ai(prompt, model_type="smart"):
+    # كنستعملو أقوى موديل (llama-3.3-70b) باش يعطينا العمق اللي بغا ديبسيك
+    model = "llama-3.3-70b-versatile"
     try:
         response = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": "You are a professional author. Write clean, deep content without conversational filler or suggestions."},
+                {"role": "system", "content": "You are a senior business consultant and expert author. Avoid fluff. Use real data, case studies, and actionable steps. Tone: Professional and high-value."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
-            max_tokens=3500
+            temperature=0.6, # هبطنا الحرارة باش يكون الكلام رزين ومنطقي
+            max_tokens=4000
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
         return f"Error: {e}"
 
 # ===============================
-# 🧹 CLEANING (ANTI-BOT & NO ASTERISKS)
+# 🧹 PRO CLEANER
 # ===============================
-def clean_txt(text):
-    """حذف النجمات وأي نصوص تقديمية من الـ AI"""
-    # حذف النجمات
-    t = text.replace("**", "").replace("###", "")
-    # حذف الجمل التقديمية المشهورة ديال الـ AI
-    t = re.sub(r"Here is a short.*:", "", t, flags=re.IGNORECASE)
-    t = re.sub(r"Here are some.*:", "", t, flags=re.IGNORECASE)
-    return t.strip()
+def clean_pro(text):
+    t = text.replace("**", "").replace("###", "").replace("---", "")
+    t = re.sub(r"(?i)^(here is|certainly|sure|based on|i will).*?[:\n]", "", t).strip()
+    return t
 
 # ===============================
-# 📄 PDF CREATOR (COLOR & PRO FORMAT)
+# 📄 THE MASTERPIECE PDF CREATOR
 # ===============================
-def create_pro_pdf(path, title, subtitle, chapters):
+def create_masterpiece_pdf(path, title, subtitle, intro, chapters_data):
     pdf = SimpleDocTemplate(path)
     styles = getSampleStyleSheet()
     
-    # ستايلات ملونة واحترافية
-    title_style = ParagraphStyle('T', parent=styles['Title'], fontSize=26, textColor=colors.dodgerblue, spaceAfter=30)
-    chap_style = ParagraphStyle('C', parent=styles['Heading1'], fontSize=18, textColor=colors.dodgerblue, spaceBefore=20)
-    body_style = ParagraphStyle('B', parent=styles['Normal'], alignment=TA_JUSTIFY, fontSize=11, leading=14)
+    # ستايلات "بريميوم"
+    title_style = ParagraphStyle('T', parent=styles['Title'], fontSize=32, textColor=colors.navy, spaceAfter=50, alignment=TA_CENTER)
+    chap_style = ParagraphStyle('C', parent=styles['Heading1'], fontSize=22, textColor=colors.darkblue, spaceBefore=30, spaceAfter=20)
+    sub_style = ParagraphStyle('S', parent=styles['Italic'], fontSize=16, textColor=colors.grey, alignment=TA_CENTER)
+    body_style = ParagraphStyle('B', parent=styles['Normal'], alignment=TA_JUSTIFY, fontSize=11, leading=16)
+    box_style = ParagraphStyle('Box', parent=styles['Normal'], fontSize=10, textColor=colors.whitesmoke, backColor=colors.darkslategray, borderPadding=10)
 
-    story = [Spacer(1, 200), Paragraph(clean_txt(title), title_style), 
-             Paragraph(clean_txt(subtitle), styles["Italic"]), PageBreak()]
+    story = []
+    # 1. Cover Page
+    story.append(Spacer(1, 250))
+    story.append(Paragraph(clean_pro(title), title_style))
+    story.append(Paragraph(clean_pro(subtitle), sub_style))
+    story.append(PageBreak())
 
-    for i, content in enumerate(chapters):
-        story.append(Paragraph(f"Chapter {i+1}", chap_style))
-        story.append(Spacer(1, 12))
-        for line in clean_txt(content).split("\n"):
-            if line.strip():
-                story.append(Paragraph(line, body_style))
-                story.append(Spacer(1, 8))
+    # 2. Introduction
+    story.append(Paragraph("Introduction: The Roadmap to Success", chap_style))
+    for p in clean_pro(intro).split("\n\n"):
+        story.append(Paragraph(p, body_style)); story.append(Spacer(1, 10))
+    story.append(PageBreak())
+
+    # 3. Chapters with Case Studies & Action Plans
+    for i, chap in enumerate(chapters_data):
+        story.append(Paragraph(f"Chapter {i+1}: {chap['title']}", chap_style))
+        
+        # Main content
+        for p in clean_pro(chap['content']).split("\n\n"):
+            story.append(Paragraph(p, body_style)); story.append(Spacer(1, 10))
+        
+        # Action Plan Box (هادي اللي كتعطي القيمة العملية)
+        story.append(Spacer(1, 15))
+        story.append(Paragraph("🛠 ACTION PLAN:", ParagraphStyle('H', parent=body_style, textColor=colors.gold, fontWeight='bold')))
+        story.append(Paragraph(clean_pro(chap['action_plan']), box_style))
+        
         story.append(PageBreak())
+        
     pdf.build(story)
 
 # ===============================
-# 🌐 THE FULL EMPIRE UI
+# 🌐 THE INTERFACE
 # ===============================
-st.set_page_config(page_title="PRO BOOK EMPIRE", layout="wide")
-tab1, tab2 = st.tabs(["📚 AI Book Factory", "🎯 Facebook Sniper"])
+st.set_page_config(page_title="THE SNIPER FACTORY", layout="wide")
+tab1, tab2 = st.tabs(["🏗️ Build Empire", "🎯 Sniper Hooks"])
 
 with tab1:
-    st.title("🚀 PROFESSIONAL BOOK FACTORY")
-    niche = st.text_input("🎯 Enter Niche", "Digital Marketing Secrets")
+    st.title("🏆 THE HIGH-VALUE BOOK FACTORY")
+    niche = st.text_input("🎯 Book Niche", "Digital Marketing for Small Businesses")
     
     if st.button("🚀 GENERATE MASTERPIECE"):
-        with st.status("🛠️ Building your professional empire...") as s:
-            # 1. العناوين
-            title = ai(f"Give me only ONE bestseller title for {niche}", "fast")
-            subtitle = ai(f"Give me only ONE emotional subtitle for {title}", "fast")
+        with st.status("🛠️ Engineering high-value content...") as s:
+            # 1. Title & Intro
+            title = ai(f"One elite title for {niche}. No fluff.", "fast")
+            subtitle = ai(f"One psychological subtitle for {title}", "fast")
+            intro = ai(f"Write a deep intro for '{title}'. Why this matters NOW and the transformation promised.", "smart")
             
-            # 2. الفصول
-            full_book = []
+            # 2. Deep Chapters
+            chapters_data = []
             for i in range(1, 6):
-                st.write(f"✍️ Writing Chapter {i} with Case Studies...")
-                full_book.append(ai(f"Write the full content for Chapter {i} of '{title}'. NO intro text, just the chapter.", "smart"))
+                st.write(f"✍️ Crafting Chapter {i} + Case Study...")
+                ch_title = ai(f"Give me a strong title for Chapter {i} of '{title}'", "fast")
+                content = ai(f"Write deep content for '{ch_title}'. Include a REAL-WORLD CASE STUDY with numbers.", "smart")
+                action = ai(f"Create a 5-step checklist/action plan for the reader based on '{ch_title}'", "fast")
+                chapters_data.append({"title": ch_title, "content": content, "action_plan": action})
             
-            # 3. هوتمارت (باقي معانا!)
-            hotmart = ai(f"Write a high-converting Hotmart sales page for {title}", "smart")
+            # 3. Marketing
+            hotmart = ai(f"Sales page for {title}. Focus on pain points and ROI.", "smart")
+            cover = ai(f"Cinematic AI prompt for {title} cover", "fast")
             
-            # 4. برومبت الغلاف (باقي معانا!)
-            cover = ai(f"Cinematic AI cover prompt for {title}", "fast")
-            
-            pdf_path = "final_pro_book.pdf"
-            create_pro_pdf(pdf_path, title, subtitle, full_book)
-            s.update(label="✅ Success!", state="complete")
+            pdf_p = "masterpiece.pdf"
+            create_masterpiece_pdf(pdf_p, title, subtitle, intro, chapters_data)
+            s.update(label="✅ Masterpiece Finished!", state="complete")
 
-        st.header(f"📖 {title}")
+        st.success(f"Final Product: {title}")
         c1, c2, c3 = st.columns(3)
         with c1:
-            with open(pdf_path, "rb") as f:
-                st.download_button("📘 Download Ebook (PDF)", f, "ebook.pdf")
-        with c2:
-            st.download_button("🛒 Hotmart Sales Copy", hotmart, "hotmart.txt")
-        with c3:
-            st.download_button("🎨 Cover Image Prompt", cover, "cover_prompt.txt")
-            
-        st.subheader("🛒 Hotmart Preview")
-        st.info(hotmart)
+            with open(pdf_p, "rb") as f: st.download_button("📘 Download PDF", f, "pro_book.pdf")
+        with c2: st.download_button("🛒 Hotmart Copy", hotmart, "hotmart.txt")
+        with c3: st.download_button("🎨 Cover Prompt", cover, "cover.txt")
 
 with tab2:
-    # [2026-01-13] Facebook Sniper is still here!
     st.title("🎯 FACEBOOK SNIPER")
-    ad_desc = st.text_input("What are you promoting?", niche)
-    if st.button("🔥 Generate Sniper Hooks"):
-        hooks = ai(f"Generate 5 aggressive FB hooks for: {ad_desc}", "smart")
+    if st.button("🔥 Generate High-ROI Hooks"):
+        hooks = ai(f"5 aggressive FB hooks for {niche}", "smart")
         st.write(hooks)
