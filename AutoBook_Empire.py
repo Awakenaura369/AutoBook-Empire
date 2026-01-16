@@ -6,21 +6,16 @@ from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib import colors
 import re
 
-# ===============================
-# 🔐 API & ENGINE (Llama 3.3 70b)
-# ===============================
+# [2026-01-10] AI engine is Groq
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 def ai(prompt, model_type="smart"):
-    # استعمال الموديل الأقوى لضمان العمق وعدم السطحية
-    model = "llama-3.3-70b-versatile"
+    model = "llama-3.3-70b-versatile" # الموديل الأقوى لتفادي السطحية
     try:
         response = client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": "You are a senior business expert. Use real-world examples, numbers, and actionable strategies. No conversational filler."},
-                {"role": "user", "content": prompt}
-            ],
+            messages=[{"role": "system", "content": "You are an expert author. Write deep, actionable content with case studies. No intro filler."},
+                      {"role": "user", "content": prompt}],
             temperature=0.6,
             max_tokens=4000
         )
@@ -28,103 +23,100 @@ def ai(prompt, model_type="smart"):
     except Exception as e:
         return f"Error: {e}"
 
-# ===============================
-# 🧹 CLEANER (ANTI-FRCHA)
-# ===============================
 def clean_pro(text):
     t = text.replace("**", "").replace("###", "").replace("---", "")
     t = re.sub(r"(?i)^(here is|certainly|sure|based on|i will|i suggest).*?[:\n]", "", t).strip()
     return t
 
 # ===============================
-# 📄 MASTERPIECE PDF CREATOR
+# 📄 FIXED PDF CREATOR (NO OVERLAP)
 # ===============================
 def create_masterpiece_pdf(path, title, subtitle, intro, chapters_data):
     pdf = SimpleDocTemplate(path)
     styles = getSampleStyleSheet()
     
-    # ستايلات الألوان والاحترافية
-    title_style = ParagraphStyle('T', parent=styles['Title'], fontSize=30, textColor=colors.navy, alignment=TA_CENTER)
-    chap_style = ParagraphStyle('C', parent=styles['Heading1'], fontSize=20, textColor=colors.darkblue)
-    body_style = ParagraphStyle('B', parent=styles['Normal'], alignment=TA_JUSTIFY, fontSize=11, leading=15)
+    # تحسين الـ Styles لمنع التداخل
+    title_style = ParagraphStyle('T', parent=styles['Title'], fontSize=26, textColor=colors.navy, alignment=TA_CENTER, leading=32)
+    sub_style = ParagraphStyle('S', parent=styles['Italic'], fontSize=12, textColor=colors.grey, alignment=TA_CENTER, leading=16)
+    chap_style = ParagraphStyle('C', parent=styles['Heading1'], fontSize=20, textColor=colors.darkblue, spaceBefore=30, spaceAfter=20)
+    body_style = ParagraphStyle('B', parent=styles['Normal'], alignment=TA_JUSTIFY, fontSize=11, leading=16)
     box_style = ParagraphStyle('Box', parent=styles['Normal'], fontSize=10, textColor=colors.whitesmoke, backColor=colors.darkslategray, borderPadding=10)
 
-    story = [Spacer(1, 200), Paragraph(clean_pro(title), title_style), Paragraph(clean_pro(subtitle), styles["Italic"]), PageBreak()]
-
-    # Introduction
-    story.append(Paragraph("Introduction", chap_style))
-    for p in clean_pro(intro).split("\n\n"):
-        story.append(Paragraph(p, body_style)); story.append(Spacer(1, 10))
+    story = []
+    
+    # 1. صفحة الغلاف مع مساحات كافية
+    story.append(Spacer(1, 150))
+    story.append(Paragraph(clean_pro(title), title_style))
+    story.append(Spacer(1, 20)) # مسافة أمان لمنع التداخل
+    story.append(Paragraph(clean_pro(subtitle), sub_style))
     story.append(PageBreak())
 
-    # Chapters
+    # 2. المقدمة + البونص (قائمة الأدوات)
+    story.append(Paragraph("Introduction & Success Roadmap", chap_style))
+    for p in clean_pro(intro).split("\n\n"):
+        story.append(Paragraph(p, body_style))
+        story.append(Spacer(1, 10))
+    
+    # إضافة Bonus: قائمة الأدوات لزيادة القيمة
+    story.append(Spacer(1, 20))
+    story.append(Paragraph("🎁 BONUS: ESSENTIAL TOOLS LIST", ParagraphStyle('H', parent=body_style, textColor=colors.red)))
+    tools_list = "1. Google Analytics (Data) | 2. Canva (Design) | 3. Meta Ads Manager (Traffic) | 4. ChatGPT/Groq (Content)"
+    story.append(Paragraph(tools_list, box_style))
+    story.append(PageBreak())
+
+    # 3. الفصول مع Action Plans
     for i, chap in enumerate(chapters_data):
         story.append(Paragraph(f"Chapter {i+1}: {chap['title']}", chap_style))
-        story.append(Spacer(1, 10))
         for p in clean_pro(chap['content']).split("\n\n"):
-            story.append(Paragraph(p, body_style)); story.append(Spacer(1, 8))
+            story.append(Paragraph(p, body_style))
+            story.append(Spacer(1, 8))
         
-        # Action Plan Box (القيمة المضافة)
+        # Action Plan
         story.append(Spacer(1, 15))
-        story.append(Paragraph("🛠 ACTION STEPS:", ParagraphStyle('H', parent=body_style, textColor=colors.gold)))
+        story.append(Paragraph("✅ YOUR ACTION PLAN:", ParagraphStyle('H', parent=body_style, textColor=colors.gold)))
         story.append(Paragraph(clean_pro(chap['action']), box_style))
         story.append(PageBreak())
         
     pdf.build(story)
 
 # ===============================
-# 🌐 FULL UI (WITH HOTMART PREVIEW)
+# 🌐 UI SETUP
 # ===============================
-st.set_page_config(page_title="SNIPER FACTORY PRO", layout="wide")
-tab1, tab2 = st.tabs(["🏗️ Build Masterpiece", "🎯 Facebook Sniper"])
+st.set_page_config(page_title="SNIPER FACTORY", layout="wide")
+t1, t2 = st.tabs(["📚 Book Factory", "🎯 Facebook Sniper"])
 
-with tab1:
+with t1:
     st.title("🏆 HIGH-VALUE BOOK FACTORY")
-    niche = st.text_input("🎯 Niche", "Passive Income Strategies")
-    
+    niche = st.text_input("🎯 Niche", "E-commerce Growth")
     if st.button("🚀 GENERATE MASTERPIECE"):
-        with st.status("🛠️ Building high-value content...") as s:
-            # 1. Title & Intro
-            title = ai(f"One elite title for {niche}. No meta-talk.", "fast")
-            subtitle = ai(f"One professional subtitle for {title}", "fast")
-            intro = ai(f"Write a 500-word deep intro for '{title}'. No intro sentences.", "smart")
-            
-            # 2. Chapters
+        with st.status("🛠️ Engineering...") as s:
+            title = ai(f"One elite title for {niche}", "fast")
+            subtitle = ai(f"One subtitle for {title}", "fast")
+            intro = ai(f"Deep intro for '{title}'", "smart")
             chapters_data = []
             for i in range(1, 6):
-                st.write(f"✍️ Writing Chapter {i} + Case Study...")
-                ch_title = ai(f"Chapter {i} title for '{title}'", "fast")
-                content = ai(f"Deep content for '{ch_title}'. Include a detailed Case Study.", "smart")
-                action = ai(f"5-step action plan for '{ch_title}'", "fast")
-                chapters_data.append({"title": ch_title, "content": content, "action": action})
-            
-            # 3. Marketing (Hotmart)
-            hotmart = ai(f"Write a high-converting Hotmart sales description for {title}. No meta-talk.", "smart")
-            cover = ai(f"AI image prompt for {title} cover", "fast")
-            
+                ch_t = ai(f"Chapter {i} title for '{title}'", "fast")
+                cont = ai(f"Deep content for '{ch_t}' with a Case Study.", "smart")
+                act = ai(f"5-step action checklist for '{ch_t}'", "fast")
+                chapters_data.append({"title": ch_t, "content": cont, "action": act})
+            hotmart = ai(f"Sales copy for {title}", "smart")
+            cover = ai(f"AI image prompt for {title}", "fast")
             pdf_p = "masterpiece.pdf"
             create_masterpiece_pdf(pdf_p, title, subtitle, intro, chapters_data)
             s.update(label="✅ Ready!", state="complete")
 
-        # --- الـ Preview والتحميل (الرجوع للساحة!) ---
-        st.success(f"Successfully Created: {title}")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
+        st.success(f"Created: {title}")
+        c1, c2, c3 = st.columns(3)
+        with c1: 
             with open(pdf_p, "rb") as f: st.download_button("📘 Download Ebook", f, "ebook.pdf")
-        with col2:
-            st.download_button("🛒 Download Hotmart Copy", hotmart, "hotmart.txt")
-        with col3:
-            st.download_button("🎨 Download Cover Prompt", cover, "cover.txt")
-
-        # عرض هوتمارت فـ الشاشة
+        with c2: st.download_button("🛒 Hotmart Copy", hotmart, "hotmart.txt")
+        with c3: st.download_button("🎨 Cover Prompt", cover, "cover.txt")
         st.divider()
-        st.subheader("🛒 Hotmart Sales Page Preview")
-        st.info(hotmart) # هاهو رجع البريفيو!
+        st.subheader("🛒 Hotmart Preview")
+        st.info(hotmart)
 
-with tab2:
+with t2:
+    # [2026-01-13] Facebook Sniper tab
     st.title("🎯 FACEBOOK SNIPER")
-    ad_desc = st.text_input("Product for hooks:", niche)
     if st.button("🔥 Generate Hooks"):
-        hooks = ai(f"5 aggressive FB hooks for {ad_desc}", "smart")
-        st.markdown(hooks)
+        st.write(ai(f"5 aggressive FB hooks for {niche}", "smart"))
